@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="id" class="scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="color" content="#1bb566">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GERMAS Jatim - Evaluasi dan Pelaporan</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/react/19.1.1/cjs/react.production.min.js">
+    <link rel="stylesheet" href="https://unpkg.com/react@18.3.1/umd/react.production.min.js"> -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="shortcut icon" href="/img/germas.ico" type="image/x-icon">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11" defer></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            },
+            colors: {
+              primary: {
+                50: '#f0f9ff',
+                100: '#e0f2fe',
+                200: '#bae6fd',
+                300: '#7dd3fc',
+                400: '#38bdf8',
+                500: '#0ea5e9',
+                600: '#0284c7', // Government Blue-ish
+                700: '#0369a1',
+                800: '#075985',
+                900: '#0c4a6e',
+                950: '#082f49',
+              },
+              health: {
+                50: '#f0fdf4',
+                100: '#dcfce7',
+                200: '#bbf7d0',
+                300: '#86efac',
+                400: '#4ade80',
+                500: '#22c55e',
+                600: '#16a34a', // Health Green
+                700: '#15803d',
+                800: '#166534',
+                900: '#14532d',
+                950: '#052e16',
+              }
+            },
+            boxShadow: {
+              'glass': '0 4px 30px rgba(0, 0, 0, 0.1)',
+              'glow': '0 0 20px rgba(14, 165, 233, 0.5)',
+            }
+          }
+        }
+      }
+    </script>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@18.2.0",
+    "react-dom/client": "https://aistudiocdn.com/react-dom@18.2.0/client",
+    "react-dom": "https://aistudiocdn.com/react-dom@18.2.0",
+    "react/jsx-runtime": "https://aistudiocdn.com/react@18.2.0/jsx-runtime",
+    "react-router-dom": "https://aistudiocdn.com/react-router-dom@6.3.0?external=react,react-dom,history",
+    "react-router": "https://aistudiocdn.com/react-router@6.3.0?external=react",
+    "history": "https://aistudiocdn.com/history@5.3.0",
+    "@tanstack/react-query": "https://aistudiocdn.com/@tanstack/react-query@4.36.1?external=react,react-dom",
+    "recharts": "https://aistudiocdn.com/recharts@2.12.2?external=react,react-dom",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@0.263.1?external=react",
+    "framer-motion": "https://aistudiocdn.com/framer-motion@10.12.16?external=react,react-dom",
+    "zod": "https://aistudiocdn.com/zod@3.22.4",
+    "react-hook-form": "https://aistudiocdn.com/react-hook-form@7.51.0?external=react",
+    "@hookform/resolvers/zod": "https://aistudiocdn.com/@hookform/resolvers@3.3.4/zod?external=react-hook-form,zod",
+    "react-hot-toast": "https://aistudiocdn.com/react-hot-toast@2.4.1?external=react,react-dom",
+    "clsx": "https://aistudiocdn.com/clsx@2.1.0",
+    "tailwind-merge": "https://aistudiocdn.com/tailwind-merge@2.2.1",
+    "date-fns": "https://aistudiocdn.com/date-fns@3.3.1",
+    "xlsx": "https://aistudiocdn.com/xlsx@0.18.5",
+    "jspdf": "https://aistudiocdn.com/jspdf@2.5.1",
+    "jspdf-autotable": "https://aistudiocdn.com/jspdf-autotable@3.8.2",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
+    "react/": "https://aistudiocdn.com/react@^19.2.1/",
+    "@hookform/resolvers/": "https://aistudiocdn.com/@hookform/resolvers@^5.2.2/"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body class="bg-cyan-50/60 text-slate-900 antialiased selection:bg-primary-500/30">
+    <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>
