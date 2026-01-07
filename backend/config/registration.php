@@ -12,9 +12,9 @@ return [
     'admin_codes_per_level' => [
         // Sesuaikan kode berikut dengan kebutuhan dan konfigurasi instansi level
         // Key sebaiknya mengikuti kolom InstansiLevel::code, misalnya: PROVINSI, KABKOTA, KECAMATAN, KELDESA
-        'PROVINSI' => env('ADMIN_CODE_PROV', '123456'),
-        'KABKOTA' => env('ADMIN_CODE_KABKOTA', '234567'),
-        'KECAMATAN' => env('ADMIN_CODE_KECAMATAN', '345678'),
-        'KELDESA' => env('ADMIN_CODE_KELDESA', '456789'),
+        'PROVINSI' => env('ADMIN_CODE_PROV', '352067'),
+        'KABKOTA' => env('ADMIN_CODE_KABKOTA', '352075'),
+        'KECAMATAN' => env('ADMIN_CODE_KECAMATAN', '352083'),
+        'KELDESA' => env('ADMIN_CODE_KELDESA', '352091'),
     ],
 ];
