@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 
-import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
-import { Save, Bell, Shield, Database, ToggleLeft, ToggleRight, Calendar, AlertTriangle } from 'lucide-react';
+import { Save, Shield, Database, Calendar, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Swal from 'sweetalert2';
 import { apiClient } from '../../utils/apiClient';

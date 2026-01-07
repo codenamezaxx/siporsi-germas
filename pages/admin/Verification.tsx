@@ -4,7 +4,7 @@ import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Modal } from '../../components/ui/Modal';
-import { Check, X, Eye, FileText, Search, Download, ChevronDown, Calendar, Building2, User, AlertCircle, Trash2 } from 'lucide-react';
+import { Check, X, Eye, FileText, Search, ChevronDown, Calendar, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { SubmissionStore, SubmissionRecord } from '../../utils/submissionStore';
 

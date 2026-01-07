@@ -1,10 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { Lock, Search, Filter, FileText, CheckCircle, Download, Calendar, ChevronDown } from 'lucide-react';
+import { Lock, Search, FileText, CheckCircle, Download, ChevronDown } from 'lucide-react';
 
 import toast from 'react-hot-toast';
 import { SubmissionRecord } from '../utils/submissionStore';

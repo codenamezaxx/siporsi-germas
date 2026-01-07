@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Users, Settings, Menu, FileCheck, Home, FileText, ChevronRight, ChevronLeft, LogOut, User, ClipboardList } from 'lucide-react';
-import { Button } from '../../components/ui/Button';
 import { showConfirmation, showSuccess } from '../../utils/alerts';
 import logoGermas from '../../components/svg/logo-germas.svg';
 import { apiClient } from '../../utils/apiClient';

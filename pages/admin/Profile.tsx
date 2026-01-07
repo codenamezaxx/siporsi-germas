@@ -3,7 +3,7 @@ import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
-import { Mail, Phone, Building2, Calendar, MapPin, Camera, PencilLine, KeyRound, User } from 'lucide-react';
+import { Mail, Calendar, Camera, PencilLine, KeyRound, User } from 'lucide-react';
 
 import { apiClient } from '../../utils/apiClient';
 
