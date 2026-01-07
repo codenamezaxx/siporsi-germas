@@ -14,28 +14,93 @@ class DashboardController extends Controller
 {
     public function metrics(Request $request): JsonResponse
     {
-        $reportStatusTotals = LaporanSubmission::selectRaw('status, COUNT(*) as total')
-            ->groupBy('status')
-            ->pluck('total', 'status');
+        $user = $request->user();
+        $levelCode = optional($user?->instansiLevel)->code;
 
-        $evaluationStatusTotals = EvaluationSubmission::selectRaw('status, COUNT(*) as total')
-            ->groupBy('status')
-            ->pluck('total', 'status');
+        if (in_array($levelCode, ['kecamatan', 'kelurahan', 'kelurahan_desa'], true)) {
+            // Admin kecamatan & kelurahan/desa: hanya melihat statistik evaluasi.
+            // Tidak boleh ada data laporan sama sekali, jadi kita tidak menyentuh LaporanSubmission di sini.
+            $reportStatusTotals = collect();
 
-        // Hitung total laporan (laporan kegiatan + evaluasi) agar kartu "Laporan Masuk"
-        // dan "Perlu Verifikasi" mencerminkan seluruh pengajuan yang masuk.
-        $laporanTotal = (int) ($reportStatusTotals['pending'] ?? 0)
-            + (int) ($reportStatusTotals['verified'] ?? 0)
-            + (int) ($reportStatusTotals['rejected'] ?? 0);
+            $evaluationStatusTotals = EvaluationSubmission::query()
+                ->forAdminUser($user)
+                ->selectRaw('status, COUNT(*) as total')
+                ->groupBy('status')
+                ->pluck('total', 'status');
 
-        $evaluationsTotal = (int) ($evaluationStatusTotals['pending'] ?? 0)
-            + (int) ($evaluationStatusTotals['verified'] ?? 0)
-            + (int) ($evaluationStatusTotals['rejected'] ?? 0);
+            $laporanTotal = 0;
 
-        $reportsTotal = $laporanTotal + $evaluationsTotal;
+            $evaluationsTotal = (int) ($evaluationStatusTotals['pending'] ?? 0)
+                + (int) ($evaluationStatusTotals['verified'] ?? 0)
+                + (int) ($evaluationStatusTotals['rejected'] ?? 0);
 
-        $averageScore = EvaluationSubmission::whereNotNull('score')->avg('score');
-        $averageScore = $averageScore !== null ? round((float) $averageScore, 1) : null;
+            $reportsTotal = $evaluationsTotal; // hanya evaluasi yang dihitung sebagai "Laporan Masuk" di level ini
+
+            $averageScore = EvaluationSubmission::query()
+                ->forAdminUser($user)
+                ->whereNotNull('score')
+                ->avg('score');
+            $averageScore = $averageScore !== null ? round((float) $averageScore, 1) : null;
+
+            // Histori: hanya dari evaluasi
+            $historyItems = EvaluationSubmission::query()
+                ->forAdminUser($user)
+                ->with(['instansi', 'instansiLevel', 'verifiedBy'])
+                ->orderByDesc('submission_date')
+                ->limit(25)
+                ->get()
+                ->map(function (EvaluationSubmission $submission) {
+                    return [
+                        'submission_db_id' => $submission->id,
+                        'id' => $submission->submission_code,
+                        'type' => 'evaluasi',
+                        'title' => 'Evaluasi ' . ($submission->instansi_name ?? $submission->submission_code),
+                        'instansi' => $submission->instansi_name ?? optional($submission->instansi)->name ?? 'Instansi tidak dikenal',
+                        'instansi_level' => $submission->instansi_level_text ?? optional($submission->instansiLevel)->name,
+                        'status' => $submission->status,
+                        'score' => $submission->score,
+                        'reviewer' => optional($submission->verifiedBy)->name,
+                        'submitted_at' => optional($submission->submission_date)->toIso8601String(),
+                    ];
+                })
+                ->filter(fn ($item) => $item['submitted_at'] !== null)
+                ->sortByDesc('submitted_at')
+                ->values();
+        } else {
+            // Level lain: gunakan statistik laporan + evaluasi seperti biasa
+            $reportStatusTotals = LaporanSubmission::query()
+                ->forAdminUser($user)
+                ->selectRaw('status, COUNT(*) as total')
+                ->groupBy('status')
+                ->pluck('total', 'status');
+
+            $evaluationStatusTotals = EvaluationSubmission::query()
+                ->forAdminUser($user)
+                ->selectRaw('status, COUNT(*) as total')
+                ->groupBy('status')
+                ->pluck('total', 'status');
+
+            // Hitung total laporan (laporan kegiatan + evaluasi) agar kartu "Laporan Masuk"
+            // dan "Perlu Verifikasi" mencerminkan seluruh pengajuan yang masuk.
+            $laporanTotal = (int) ($reportStatusTotals['pending'] ?? 0)
+                + (int) ($reportStatusTotals['verified'] ?? 0)
+                + (int) ($reportStatusTotals['rejected'] ?? 0);
+
+            $evaluationsTotal = (int) ($evaluationStatusTotals['pending'] ?? 0)
+                + (int) ($evaluationStatusTotals['verified'] ?? 0)
+                + (int) ($evaluationStatusTotals['rejected'] ?? 0);
+
+            $reportsTotal = $laporanTotal + $evaluationsTotal;
+
+            $averageScore = EvaluationSubmission::query()
+                ->forAdminUser($user)
+                ->whereNotNull('score')
+                ->avg('score');
+            $averageScore = $averageScore !== null ? round((float) $averageScore, 1) : null;
+
+            // Histori juga mengikuti scope admin yang login (laporan + evaluasi)
+            $historyItems = $this->resolveRecentSubmissions($user);
+        }
 
         $instansiTotal = Instansi::count();
 
@@ -66,7 +131,8 @@ class DashboardController extends Controller
             ],
         ];
 
-        $historyItems = $this->resolveRecentSubmissions();
+        // Histori juga mengikuti scope admin yang login
+        $historyItems = $this->resolveRecentSubmissions($user);
 
         $analytics = $this->resolveAnalytics();
 
@@ -101,9 +167,10 @@ class DashboardController extends Controller
         ]);
     }
 
-    private function resolveRecentSubmissions()
+    private function resolveRecentSubmissions($user)
     {
         $laporan = LaporanSubmission::query()
+            ->forAdminUser($user)
             ->with(['instansi', 'instansiLevel', 'verifiedBy'])
             ->orderByDesc('submitted_at')
             ->limit(25)
@@ -124,6 +191,7 @@ class DashboardController extends Controller
             });
 
         $evaluations = EvaluationSubmission::query()
+            ->forAdminUser($user)
             ->with(['instansi', 'instansiLevel', 'verifiedBy'])
             ->orderByDesc('submission_date')
             ->limit(25)
@@ -143,7 +211,8 @@ class DashboardController extends Controller
                 ];
             });
 
-        return $laporan->merge($evaluations)
+        // Ubah ke base collection sebelum merge untuk menghindari error getKey() pada Eloquent collection
+        return $laporan->toBase()->merge($evaluations->toBase())
             ->filter(fn ($item) => $item['submitted_at'] !== null)
             ->sortByDesc('submitted_at')
             ->values()

@@ -3,18 +3,22 @@
 namespace App\Http\Controllers;
 
 use App\Http\Resources\UserResource;
+use App\Mail\PasswordOtpMail;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 
 class AuthController extends Controller
 {
-    private const MAX_ATTEMPTS = 3;
+    private const MAX_ATTEMPTS = 10;
     private const BLOCK_DURATION = 1800; // seconds
 
     private $motivationalQuotes = [
@@ -36,8 +40,9 @@ class AuthController extends Controller
             return $this->forbiddenResponse($ip, Cache::get($blockKey));
         }
 
+        // Field "email" pada form login dapat diisi dengan email ATAU username.
         $credentials = $request->validate([
-            'email' => ['required', 'email'],
+            'email' => ['required', 'string', 'max:255'],
             'password' => ['required', 'string', 'min:8'],
         ]);
 
@@ -100,15 +105,16 @@ class AuthController extends Controller
 
     public function updateProfile(Request $request): JsonResponse
     {
+        $user = $request->user();
+
         $payload = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:30'],
+            'username' => ['required', 'string', 'max:50', Rule::unique(User::class, 'username')->ignore($user->id)],
         ]);
 
-        $user = $request->user();
         $user->forceFill([
             'name' => $payload['name'],
-            'phone' => $payload['phone'] ?? null,
+            'username' => $payload['username'],
         ])->save();
 
         $user = $user->fresh(['instansi', 'instansiLevel', 'originRegency', 'originDistrict', 'originVillage']);
@@ -146,6 +152,134 @@ class AuthController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Password berhasil diubah.',
+        ]);
+    }
+
+    public function forgotPassword(Request $request): JsonResponse
+    {
+        $payload = $request->validate([
+            'email' => ['required', 'email'],
+        ]);
+
+        $user = User::where('email', $payload['email'])->first();
+
+        if (! $user) {
+            return response()->json([
+                'status' => 'unprocessable_entity',
+                'message' => 'Email tidak terdaftar.',
+                'errors' => [
+                    'email' => ['Email tidak terdaftar.'],
+                ],
+            ], 422);
+        }
+
+        $otp = (string) random_int(100000, 999999);
+
+        DB::table('password_reset_tokens')->updateOrInsert(
+            ['email' => $user->email],
+            [
+                'token' => Hash::make($otp),
+                'created_at' => Carbon::now(),
+            ],
+        );
+
+        Mail::to($user->email)->send(new PasswordOtpMail($user, $otp));
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Kode OTP telah dikirim ke email anda.',
+        ]);
+    }
+
+    public function verifyForgotPasswordOtp(Request $request): JsonResponse
+    {
+        $payload = $request->validate([
+            'email' => ['required', 'email'],
+            'otp' => ['required', 'digits:6'],
+        ]);
+
+        $record = DB::table('password_reset_tokens')->where('email', $payload['email'])->first();
+
+        if (! $record) {
+            return response()->json([
+                'status' => 'unprocessable_entity',
+                'message' => 'Kode OTP tidak ditemukan.',
+            ], 422);
+        }
+
+        $createdAt = $record->created_at ? Carbon::parse($record->created_at) : null;
+        if (! $createdAt || $createdAt->lt(Carbon::now()->subMinutes(10))) {
+            return response()->json([
+                'status' => 'unprocessable_entity',
+                'message' => 'Kode OTP sudah kadaluarsa.',
+            ], 422);
+        }
+
+        if (! Hash::check($payload['otp'], $record->token)) {
+            return response()->json([
+                'status' => 'unprocessable_entity',
+                'message' => 'Kode OTP tidak sesuai.',
+            ], 422);
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Kode OTP valid.',
+        ]);
+    }
+
+    public function resetForgotPassword(Request $request): JsonResponse
+    {
+        $payload = $request->validate([
+            'email' => ['required', 'email'],
+            'otp' => ['required', 'digits:6'],
+            'password' => ['required', 'string', 'confirmed', Password::min(8)],
+        ]);
+
+        $user = User::where('email', $payload['email'])->first();
+        if (! $user) {
+            return response()->json([
+                'status' => 'unprocessable_entity',
+                'message' => 'Email tidak terdaftar.',
+                'errors' => [
+                    'email' => ['Email tidak terdaftar.'],
+                ],
+            ], 422);
+        }
+
+        $record = DB::table('password_reset_tokens')->where('email', $payload['email'])->first();
+
+        if (! $record) {
+            return response()->json([
+                'status' => 'unprocessable_entity',
+                'message' => 'Kode OTP tidak ditemukan.',
+            ], 422);
+        }
+
+        $createdAt = $record->created_at ? Carbon::parse($record->created_at) : null;
+        if (! $createdAt || $createdAt->lt(Carbon::now()->subMinutes(10))) {
+            return response()->json([
+                'status' => 'unprocessable_entity',
+                'message' => 'Kode OTP sudah kadaluarsa.',
+            ], 422);
+        }
+
+        if (! Hash::check($payload['otp'], $record->token)) {
+            return response()->json([
+                'status' => 'unprocessable_entity',
+                'message' => 'Kode OTP tidak sesuai.',
+            ], 422);
+        }
+
+        $user->forceFill([
+            'password' => $payload['password'],
+        ])->save();
+
+        DB::table('password_reset_tokens')->where('email', $payload['email'])->delete();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Password berhasil diperbarui.',
         ]);
     }
 
@@ -257,8 +391,13 @@ class AuthController extends Controller
 
     private function attemptLogin(array $credentials): ?User
     {
+        $login = $credentials['email']; // bisa berupa email atau username
+
         $user = User::with(['instansi', 'instansiLevel'])
-            ->where('email', $credentials['email'])
+            ->where(function ($query) use ($login) {
+                $query->where('email', $login)
+                    ->orWhere('username', $login);
+            })
             ->first();
 
         if (! $user || ! Hash::check($credentials['password'], $user->password)) {

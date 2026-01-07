@@ -12,7 +12,8 @@ import { apiClient } from '../utils/apiClient';
 import { generateEvaluasiPDF, generateLaporanPDF } from '../utils/pdfGenerator';
 
 // Local SVG Assets
-import LogoGermas from '../components/svg/logo-germas.svg';
+import LogoGermasDesktop from '../components/svg/logo-germas.svg';
+import LogoGermasMobile from '../components/svg/logo-germas-normal.svg';
 import ChecklistIcon from '../components/svg/checklist.svg';
 import BookIcon from '../components/svg/book.svg';
 
@@ -46,6 +47,33 @@ const Home: React.FC = () => {
   // Pagination state for verified data table
   const [page, setPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(10);
+
+    // Configuration of reporting limit
+  const [reportingDeadline, setReportingDeadline] = useState<string | null>(null);
+  const [allowLateReporting, setAllowLateReporting] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const storedDeadline = window.localStorage.getItem('reporting_deadline');
+    const storedAllowLate = window.localStorage.getItem('allow_late_reporting');
+
+    if (storedDeadline) {
+      setReportingDeadline(storedDeadline);
+    }
+
+    if (storedAllowLate !== null) {
+      setAllowLateReporting(storedAllowLate === 'true');
+    }
+  }, []);
+
+  const isLateSubmission = (submitDateIso: string | null | undefined): boolean => {
+    if (!allowLateReporting || !reportingDeadline || !submitDateIso) return false;
+    const deadline = new Date(reportingDeadline);
+    const submittedAt = new Date(submitDateIso);
+    if (Number.isNaN(deadline.getTime()) || Number.isNaN(submittedAt.getTime())) return false;
+    return submittedAt.getTime() > deadline.getTime();
+  };
 
   // Handle hash scrolling, Auth check, and Data Fetching
   useEffect(() => {
@@ -101,15 +129,29 @@ const Home: React.FC = () => {
 
         const mapEval: SubmissionRecord[] = evalItems.map((item: any) => {
           const submissionDate = item.submission_date ?? item.created_at ?? null;
-          const yearFromEvaluation = item.evaluation_date ? new Date(item.evaluation_date).getFullYear() : null;
-          const yearFromSubmission = submissionDate ? new Date(submissionDate).getFullYear() : new Date().getFullYear();
+
+          // Utamakan tahun pelaporan global yang dikirim dari frontend (report_year)
+          const yearFromReport = typeof item.report_year === 'number'
+            ? item.report_year
+            : (typeof item.report_year === 'string' && item.report_year.trim() !== ''
+              ? Number(item.report_year)
+              : null);
+
+          const yearFromEvaluation = item.evaluation_date
+            ? new Date(item.evaluation_date).getFullYear()
+            : null;
+
+          const yearFromSubmission = submissionDate
+            ? new Date(submissionDate).getFullYear()
+            : new Date().getFullYear();
 
           return {
             id: item.submission_code ?? String(item.id),
             type: 'evaluasi',
             instansiName: item.instansi_name ?? 'Instansi tidak dikenal',
             submitDate: submissionDate ?? new Date().toISOString(),
-            year: yearFromEvaluation ?? yearFromSubmission,
+            // Prioritas: report_year -> evaluation_date -> submission_date
+            year: yearFromReport ?? yearFromEvaluation ?? yearFromSubmission,
             status: item.status ?? 'pending',
             payload: {
               // Seragamkan dengan struktur sebelumnya: backend.data menampung resource
@@ -270,6 +312,15 @@ const Home: React.FC = () => {
           jmlLaki: backendData?.employee_male_count ?? 0,
           jmlPerempuan: backendData?.employee_female_count ?? 0,
           tanggal: backendData?.evaluation_date ?? backendData?.submission_date ?? null,
+          tingkat:
+            backendData?.instansi_level_text ??
+            backendData?.instansi_level?.name ??
+            null,
+          reportYear:
+            backendData?.report_year ??
+            (backendData?.evaluation_date
+              ? new Date(backendData.evaluation_date).getFullYear()
+              : new Date().getFullYear()),
         };
 
         const answersFromBackend: any[] = backendData?.answers ?? [];
@@ -546,13 +597,13 @@ const Home: React.FC = () => {
               } : {})}
               className="order-last md:order-first md:pr-8 text-left"
             >
-              <h1 className="text-3xl md:text-5xl font-black text-slate-800 mb-3 leading-tight tracking-tight">
+              <h1 className="text-3xl md:text-5xl font-black text-cyan-950 mb-3 leading-tight tracking-tight">
                 SI-PORSI <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 via-teal-500 to-sky-500">GERMAS</span>
               </h1>
-              <h2 className="text-lg md:text-2xl text-slate-600 font-medium mb-4 text-teal-900">
-                Sistem Pelaporan dan Evaluasi GERMAS Pada Tatanan Tempat Kerja
+              <h2 className="text-lg text-slate-600 font-medium mb-4 text-teal-900">
+                Sistem Pelaporan dan Evaluasi <br />GERMAS Pada Tatanan Tempat Kerja
               </h2>
-              <h3 className="text-lg md:text-2l text-slate-600 font-medium mb-4">
+              <h3 className="text-lg text-slate-600 mb-4">
                 Dinas Kesehatan Provinsi Jawa Timur
               </h3>
               <div className="flex flex-wrap gap-4 justify-start">
@@ -575,46 +626,26 @@ const Home: React.FC = () => {
               </div>
               <div className="mt-6 grid grid-cols-2 gap-4 max-w-md">
               </div>
-              <div className="mt-6">
-                <span
-                  className={`inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-semibold shadow-sm transition-colors ${
-                    apiStatus.state === 'online'
-                      ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
-                      : apiStatus.state === 'loading'
-                        ? 'bg-amber-100 text-amber-700 border border-amber-200'
-                        : 'bg-red-100 text-red-700 border border-red-200'
-                  }`}
-                >
-                  <span
-                    className={`h-2 w-2 rounded-full ${
-                      apiStatus.state === 'online'
-                        ? 'bg-emerald-500'
-                        : apiStatus.state === 'loading'
-                          ? 'bg-amber-500'
-                          : 'bg-red-500'
-                    }`}
-                  />
-                  {apiStatus.state === 'loading'
-                    ? 'Menghubungkan ke API...'
-                    : apiStatus.state === 'online'
-                      ? 'API terhubung'
-                      : 'API tidak dapat dijangkau'}
-                  {apiStatus.message && (
-                    <span className="font-normal text-[11px] text-slate-500">({apiStatus.message})</span>
-                  )}
-                </span>
-              </div>
             </motion.div>
 
             {/* Logo Germas */}
             <div className="flex-1 flex justify-center md:justify-center relative order-first md:order-last md:pl-8">
-              <div className="w-56 h-56 md:w-80 md:h-80 relative flex items-center justify-center">
+              <div className="w-auto h-56 mb-10 relative flex items-center justify-center">
+                {/* Mobile: logo-germas-normal.svg */}
                 <img
-                  src={LogoGermas}
+                  src={LogoGermasMobile}
                   alt="Logo GERMAS"
                   loading="lazy"
                   decoding="async"
-                  className="relative z-10 w-full h-full object-contain drop-shadow-[0_20px_38px_rgba(16,185,129,0.32)] hover:scale-105 transition-transform duration-500"
+                  className="relative z-10 w-full h-full object-contain drop-shadow-[0_20px_38px_rgba(16,185,129,0.32)] hover:scale-105 transition-transform duration-500 block md:hidden"
+                />
+                {/* Desktop: logo-germas.svg */}
+                <img
+                  src={LogoGermasDesktop}
+                  alt="Logo GERMAS"
+                  loading="lazy"
+                  decoding="async"
+                  className="relative z-10 w-full h-full object-contain drop-shadow-[0_20px_38px_rgba(16,185,129,0.32)] hover:scale-105 transition-transform duration-500 hidden md:block"
                 />
               </div>
             </div>
@@ -878,6 +909,9 @@ const Home: React.FC = () => {
                                 (row.payload as any)?.level ??
                                 null;
 
+                              const wasLateAtSubmission: boolean = !!backendData?.is_late;
+                              const isLate: boolean = wasLateAtSubmission || isLateSubmission(row.submitDate);
+
                               // Tentukan label asal wilayah yang ditampilkan di bawah nama instansi
                               const isProvinsiLevel =
                                 !!instansiLevelText && instansiLevelText.toUpperCase().includes('PROVINSI');
@@ -948,11 +982,18 @@ const Home: React.FC = () => {
                                   </td>
 
                                   <td className="px-6 py-4 text-slate-500 text-xs">
-                                    {new Date(row.submitDate).toLocaleDateString('id-ID', {
-                                      day: 'numeric',
-                                      month: 'long',
-                                      year: 'numeric',
-                                    })}
+                                    <div>
+                                      {new Date(row.submitDate).toLocaleDateString('id-ID', {
+                                        day: 'numeric',
+                                        month: 'long',
+                                        year: 'numeric',
+                                      })}
+                                    </div>
+                                    {isLate && (
+                                      <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-700 border border-red-200">
+                                        Terlambat
+                                      </span>
+                                    )}
                                   </td>
                                   <td className="px-6 py-4 text-center">
                                     <button

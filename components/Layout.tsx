@@ -1,11 +1,45 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { Menu, X, MapPin, Phone, Mail, Globe, Facebook, Instagram, Youtube, Twitter, LayoutDashboard, LogOut, UserCircle, ChevronDown, User, Settings, Activity } from 'lucide-react';
+import { Menu, X, MapPin, Phone, Mail, Globe, Facebook, Instagram, Youtube, Twitter, LayoutDashboard, LogOut, UserCircle, ChevronDown, User, Settings, Activity, type LucideIcon } from 'lucide-react';
+
 import { Button } from './ui/Button';
 import { showConfirmation, showSuccess } from '../utils/alerts';
 import LogoJatim from './svg/logo-jatim.svg';
-import { VisitorTracker, VisitorStats } from '../utils/visitorTracker';
+import LogoGermasLight from './svg/logo-germas-light.svg';
+
 import { apiClient } from '../utils/apiClient';
+
+type SocialLink = {
+  icon: LucideIcon;
+  href: string;
+  label: string;
+};
+
+const SOCIAL_LINKS: SocialLink[] = [
+  { icon: Facebook, href: 'https://www.facebook.com/dinkesjatim.page', label: 'Facebook Dinas Kesehatan Provinsi Jawa Timur' },
+  { icon: Twitter, href: 'https://twitter.com/dinkesjatim', label: 'Twitter Dinas Kesehatan Provinsi Jawa Timur' },
+  { icon: Instagram, href: 'https://www.instagram.com/dinkesjatim/', label: 'Instagram Dinas Kesehatan Provinsi Jawa Timur' },
+  { icon: Youtube, href: 'https://www.youtube.com/@promkesjatimtv3926', label: 'YouTube Dinas Kesehatan Provinsi Jawa Timur' },
+];
+
+const SocialMediaLinks: React.FC = () => {
+  return (
+    <div className="flex gap-3">
+      {SOCIAL_LINKS.map(({ icon: Icon, href, label }) => (
+        <a
+          key={label}
+          href={href}
+          aria-label={label}
+          target={href.startsWith('http') ? '_blank' : undefined}
+          rel={href.startsWith('http') ? 'noreferrer' : undefined}
+          className="w-10 h-10 rounded-full bg-emerald-700/70 flex items-center justify-center text-emerald-100 hover:bg-white hover:text-emerald-700 transition-all duration-300 border border-emerald-500/60 hover:border-white"
+        >
+          <Icon className="w-5 h-5" />
+        </a>
+      ))}
+    </div>
+  );
+};
 
 const Layout: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -16,13 +50,6 @@ const Layout: React.FC = () => {
   const [authPhoto, setAuthPhoto] = useState<string | null>(null);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
-  const [visitorStats, setVisitorStats] = useState<VisitorStats>(() => {
-    if (typeof window === 'undefined') {
-      return { totalVisits: 0, todayVisits: 0, weekVisits: 0, history: [] };
-    }
-    return VisitorTracker.getStats();
-  });
-  const numberFormatter = useMemo(() => new Intl.NumberFormat('id-ID'), []);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -109,20 +136,6 @@ const Layout: React.FC = () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
-
-  useEffect(() => {
-    const unsubscribe = VisitorTracker.subscribe((stats) => {
-      setVisitorStats(stats);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (location.pathname.startsWith('/admin')) return;
-    VisitorTracker.recordVisit();
-  }, [location.pathname]);
-
-  const formatNumber = (value: number) => numberFormatter.format(value);
 
   const handleLogout = async () => {
     const result = await showConfirmation('Konfirmasi Logout', 'Apakah Anda yakin ingin keluar dari akun ini?', 'Keluar', 'Batal');
@@ -218,7 +231,7 @@ const Layout: React.FC = () => {
             <img 
               src={LogoJatim} 
               alt="Logo Jatim" 
-              className="h-12 w-auto transition-transform group-hover:scale-105 drop-shadow-[0_12px_20px_rgba(16,185,129,0.18)]"
+              className="h-11 w-auto ml-4 transition-transform group-hover:scale-105 drop-shadow-[0_12px_20px_rgba(16,185,129,0.18)]"
             />
             <div>
               <h2 className="text-[10px] md:text-xs font-bold text-emerald-600 uppercase tracking-widest">Pemerintah Provinsi Jawa Timur</h2>
@@ -229,33 +242,22 @@ const Layout: React.FC = () => {
           {/* Desktop Nav */}
           <div className="hidden md:flex items-center gap-8">
             <nav className="flex items-center gap-6">
-              {navItems.map((item) => {
-                // Determine active state more precisely
-                let isActive = false;
-                if (item.path === '/') {
-                    isActive = location.pathname === '/' && !location.hash;
-                } else if (item.path.includes('#')) {
-                    const hash = `#${item.path.split('#')[1]}`;
-                    isActive = location.hash === hash;
-                }
-
-                return (
-                  <Link 
-                    key={item.path} 
-                    to={item.path}
-                    onClick={(e) => handleNavClick(e, item.path)}
-                    className={`text-sm font-semibold py-1 transition-all duration-300 relative group ${
-                      isActive 
-                        ? 'text-emerald-600' 
-                        : 'text-slate-500 hover:text-emerald-600'
-                    }`}
-                  >
-                    {item.label}
-                    {/* Underline Style */}
-                    <span className={`absolute bottom-0 left-0 w-full h-0.5 bg-gradient-to-r from-emerald-500 to-teal-500 transform origin-left transition-transform duration-300 ${isActive ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'}`}></span>
-                  </Link>
-                );
-              })}
+              {navItems.map((item) => (
+                <Link 
+                  key={item.path} 
+                  to={item.path}
+                  onClick={(e) => handleNavClick(e, item.path)}
+                  className={`text-sm font-semibold py-1 transition-all duration-300 relative group ${
+                    (item.path === '/' && location.pathname === '/' && !location.hash) || (item.path !== '/' && location.hash === `#${item.path.split('#')[1]}`)
+                      ? 'text-emerald-600' 
+                      : 'text-slate-500 hover:text-emerald-600'
+                  }`}
+                >
+                  {item.label}
+                  {/* Underline Style */}
+                  <span className={`absolute bottom-0 left-0 w-full h-0.5 bg-gradient-to-r from-emerald-500 to-teal-500 transform origin-left transition-transform duration-300 ${((item.path === '/' && location.pathname === '/' && !location.hash) || (item.path !== '/' && location.hash === `#${item.path.split('#')[1]}`)) ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'}`}></span>
+                </Link>
+              ))}
             </nav>
             <div className="h-6 w-px bg-emerald-100"></div>
             
@@ -361,9 +363,9 @@ const Layout: React.FC = () => {
                   to={item.path}
                   onClick={(e) => handleNavClick(e, item.path)}
                   className={`block px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-                     (item.path === '/' && location.pathname === '/' && !location.hash) || (item.path !== '/' && location.hash === `#${item.path.split('#')[1]}`)
-                       ? 'bg-emerald-100/70 text-emerald-700 border-l-4 border-emerald-500' 
-                       : 'text-slate-600 hover:bg-emerald-50'
+                    (item.path === '/' && location.pathname === '/' && !location.hash) || (item.path !== '/' && location.hash === `#${item.path.split('#')[1]}`)
+                      ? 'bg-emerald-100/70 text-emerald-700 border-l-4 border-emerald-500' 
+                      : 'text-slate-600 hover:bg-emerald-50'
                   }`}
                 >
                   {item.label}
@@ -417,21 +419,6 @@ const Layout: React.FC = () => {
          <Outlet />
       </main>
 
-      {!location.pathname.startsWith('/admin') && (
-        <div className="fixed left-4 bottom-6 z-40 flex items-center gap-3 rounded-2xl border border-emerald-100 bg-white/90 px-4 py-3 shadow-lg shadow-emerald-200/60 backdrop-blur">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-600">
-            <Activity className="h-5 w-5" />
-          </div>
-          <div className="flex flex-col">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.3em] text-slate-400">Pengunjung</span>
-            <span className="text-sm font-bold text-slate-800">{formatNumber(visitorStats.totalVisits)} kunjungan</span>
-            <span className="text-[11px] font-medium text-emerald-600">
-              +{formatNumber(visitorStats.todayVisits)} hari ini
-            </span>
-          </div>
-        </div>
-      )}
-
       {/* Footer */}
       <footer className="relative mt-auto bg-gradient-to-br from-emerald-800 via-emerald-900 to-teal-900 text-emerald-50">
          {/* Colorful Border Top representing GERMAS Colors */}
@@ -446,11 +433,20 @@ const Layout: React.FC = () => {
             <div className="grid md:grid-cols-3 gap-12 mb-12">
                {/* Identity */}
                <div className="space-y-6">
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center">
+                     <img
+                        src={LogoGermasLight}
+                        alt="Logo GERMAS"
+                        className="h-20 w-19 opacity-95"
+                        loading="lazy"
+                        decoding="async"
+                     />
+                  </div>
+                  <div className="flex items-center gap-1">
                      <img 
                         src={LogoJatim} 
                         alt="Logo Jatim" 
-                        className="h-14 w-auto opacity-95 drop-shadow-[0_20px_35px_rgba(4,120,87,0.35)]"
+                        className="h-14 w-auto opacity-95 mr-4"
                      />
                      <div>
                         <h2 className="text-xs font-bold text-emerald-100 uppercase tracking-widest">Pemerintah Provinsi Jawa Timur</h2>
@@ -458,15 +454,9 @@ const Layout: React.FC = () => {
                      </div>
                   </div>
                   <p className="text-emerald-100/90 text-sm leading-relaxed pr-4">
-                     SI-PORSI GERMAS. Sistem Pelaporan dan Evaluasi Gerakan Masyarakat Hidup Sehat (GERMAS) Pada Tatanan Tempat Kerja .
+                     SI-PORSI GERMAS &mdash; Sistem Pelaporan dan Evaluasi Gerakan Masyarakat Hidup Sehat (GERMAS) pada Tatanan Tempat Kerja.
                   </p>
-                  <div className="flex gap-3">
-                     {[Facebook, Twitter, Instagram, Youtube].map((Icon, i) => (
-                        <a key={i} href="#" className="w-10 h-10 rounded-full bg-emerald-700/70 flex items-center justify-center text-emerald-100 hover:bg-white hover:text-emerald-700 transition-all duration-300 border border-emerald-500/60 hover:border-white">
-                           <Icon className="w-5 h-5" />
-                        </a>
-                     ))}
-                  </div>
+                  <SocialMediaLinks />
                </div>
 
                {/* Links */}
@@ -477,7 +467,7 @@ const Layout: React.FC = () => {
                   </h3>
                   <ul className="space-y-3 text-sm">
                      <li><a href="https://dinkes.jatimprov.go.id/" className="hover:text-white hover:translate-x-1 transition-all inline-block text-emerald-100/90">Dinkes Jatim</a></li>
-                     <li><a href="https://jatimprov.go.id/" className="hover:text-white hover:translate-x-1 transition-all inline-block text-emerald-100/90">Pemprov Jstim</a></li>
+                     <li><a href="https://jatimprov.go.id/" className="hover:text-white hover:translate-x-1 transition-all inline-block text-emerald-100/90">Pemprov Jatim</a></li>
                      <li><a href="https://www.kemkes.go.id/" className="hover:text-white hover:translate-x-1 transition-all inline-block text-emerald-100/90">Kementrian Kesehatan RI</a></li>
                      <li><a href="https://promkes.kemkes.go.id/" className="hover:text-white hover:translate-x-1 transition-all inline-block text-emerald-100/90">Promkes Kemkes</a></li>
                      <li><a href="https://yankes.kemkes.go.id/" className="hover:text-white hover:translate-x-1 transition-all inline-block text-emerald-100/90">Yankes Kemkes</a></li>
@@ -524,7 +514,7 @@ const Layout: React.FC = () => {
             </div>
 
             <div className="border-t border-emerald-600/60 pt-8 mt-8 text-center text-xs text-emerald-200/90">
-               <p className="mb-2">© 2025-2026 Dinas Kesehatan Provinsi Jawa Timur. Hak Cipta Dilindungi Undang-Undang.</p>
+               <p className="mb-2">© 2026 Dinas Kesehatan Provinsi Jawa Timur. Hak Cipta Dilindungi Undang-Undang.</p>
             </div>
          </div>
       </footer>

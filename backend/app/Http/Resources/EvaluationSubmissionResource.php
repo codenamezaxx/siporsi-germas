@@ -39,6 +39,8 @@ class EvaluationSubmissionResource extends JsonResource
             'employee_female_count' => $this->employee_female_count,
             'evaluation_date' => optional($this->evaluation_date)->format('Y-m-d'),
             'submission_date' => optional($this->submission_date)->toIso8601String(),
+            'report_year' => $this->report_year,
+            'is_late' => $this->is_late,
             'score' => $this->score,
             'category' => $this->whenLoaded('category', function () {
                 return [

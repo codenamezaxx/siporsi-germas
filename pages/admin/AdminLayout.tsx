@@ -24,12 +24,14 @@ const AdminLayout: React.FC = () => {
   const [userName, setUserName] = useState<string>('Administrator');
   const [userEmail, setUserEmail] = useState<string>('admin@germas.local');
   const [userPhoto, setUserPhoto] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
   useEffect(() => {
     const syncFromStorage = () => {
       setUserName(sessionStorage.getItem('user_name') ?? localStorage.getItem('user_name') ?? 'Administrator');
       setUserEmail(sessionStorage.getItem('user_email') ?? localStorage.getItem('user_email') ?? 'admin@germas.local');
       setUserPhoto(sessionStorage.getItem('user_photo_url') ?? localStorage.getItem('user_photo_url'));
+      setUserRole(sessionStorage.getItem('user_role') ?? localStorage.getItem('user_role'));
     };
 
     syncFromStorage();
@@ -90,11 +92,59 @@ const AdminLayout: React.FC = () => {
     { label: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
     { label: 'Verifikasi Laporan', path: '/admin/verifikasi', icon: FileCheck },
     { label: 'Manajemen Formulir', path: '/admin/forms', icon: ClipboardList }, // New Menu
-    { label: 'Data Wilayah', path: '/admin/wilayah', icon: FileText },
     { label: 'Manajemen User', path: '/admin/users', icon: Users },
     { label: 'Profil Saya', path: '/admin/profile', icon: User },
     { label: 'Pengaturan', path: '/admin/settings', icon: Settings },
   ];
+
+  const effectiveRole = (userRole ?? '').toLowerCase().trim();
+
+  const canAccessSettings =
+    effectiveRole.includes('super_admin') ||
+    effectiveRole.includes('admin_provinsi');
+
+  const isMenuItemVisible = (label: string): boolean => {
+    if (label === 'Manajemen Formulir') {
+      return (
+        effectiveRole.includes('super_admin') ||
+        effectiveRole.includes('admin_provinsi')
+      );
+    }
+
+    if (label === 'Manajemen User') {
+      if (!effectiveRole) return false;
+
+      if (
+        effectiveRole.includes('super_admin') ||
+        effectiveRole.includes('admin_provinsi')
+      ) {
+        return true;
+      }
+
+      if (
+        effectiveRole.includes('admin_kabkota') ||
+        effectiveRole.includes('admin_kecamatan')
+      ) {
+        return true;
+      }
+
+      return false;
+    }
+
+    if (label === 'Pengaturan') {
+      // Halaman Pengaturan hanya untuk admin_provinsi (dan super_admin bila ada)
+      if (
+        effectiveRole.includes('super_admin') ||
+        effectiveRole.includes('admin_provinsi')
+      ) {
+        return true;
+      }
+
+      return false;
+    }
+
+    return true;
+  };
 
   const handleLogout = async () => {
     const result = await showConfirmation(
@@ -124,6 +174,18 @@ const AdminLayout: React.FC = () => {
     await showSuccess('Logout Berhasil', 'Anda telah keluar dari portal admin.');
     navigate('/login');
   };
+
+  // Batasi akses langsung ke halaman pengaturan hanya untuk admin_provinsi / super_admin
+  // Tunggu hingga userRole terbaca terlebih dahulu agar admin sah tidak ikut ter-redirect saat initial load
+  useEffect(() => {
+    if (!userRole) {
+      return;
+    }
+
+    if (location.pathname.startsWith('/admin/settings') && !canAccessSettings) {
+      navigate('/forbidden', { replace: true });
+    }
+  }, [location.pathname, canAccessSettings, navigate, userRole]);
 
   return (
     <div className="flex h-screen bg-slate-100 overflow-hidden relative">
@@ -183,7 +245,7 @@ const AdminLayout: React.FC = () => {
 
         {/* Navigation Links */}
         <nav className="flex-1 py-6 space-y-1 px-3 overflow-y-auto custom-scrollbar">
-          {menuItems.map((item) => {
+          {menuItems.filter((item) => isMenuItemVisible(item.label)).map((item) => {
             const Icon = item.icon;
             // Check active state
             const isActive = location.pathname.startsWith(item.path);

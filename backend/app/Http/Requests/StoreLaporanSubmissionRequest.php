@@ -24,9 +24,9 @@ class StoreLaporanSubmissionRequest extends FormRequest
             'origin_regency_name' => ['nullable', 'string', 'max:255'],
             'report_year' => ['required', 'integer', 'min:2000', 'max:2100'],
             'report_level' => ['nullable', 'string', 'max:120'],
+            'is_late' => ['nullable', 'boolean'],
             'notes' => ['nullable', 'string'],
             'sections' => ['required', 'array', 'min:1'],
-            // section_id dibuat benar-benar opsional dan tidak harus berupa ID valid di tabel laporan_sections
             'sections.*.section_id' => ['nullable'],
             'sections.*.section_code' => ['nullable', 'string', 'max:50'],
             'sections.*.section_title' => ['required', 'string', 'max:255'],

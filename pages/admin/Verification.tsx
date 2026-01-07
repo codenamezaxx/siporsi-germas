@@ -35,6 +35,10 @@ const Verification: React.FC = () => {
   const [laporanPage, setLaporanPage] = useState<number>(1);
   const [laporanPageSize, setLaporanPageSize] = useState<number>(10);
 
+  // Reporting limit state
+  const [reportingDeadline, setReportingDeadline] = useState<string | null>(null);
+  const [allowLateReporting, setAllowLateReporting] = useState<boolean>(false);
+
   // Modal State
   const [selectedRecord, setSelectedRecord] = useState<SubmissionRecord | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -83,15 +87,29 @@ const Verification: React.FC = () => {
 
         const evalRecords: SubmissionRecord[] = evalItems.map((item: any) => {
           const submissionDate = item.submission_date ?? item.created_at ?? null;
-          const yearFromEvaluation = item.evaluation_date ? new Date(item.evaluation_date).getFullYear() : null;
-          const yearFromSubmission = submissionDate ? new Date(submissionDate).getFullYear() : new Date().getFullYear();
+
+          // Utamakan tahun pelaporan global (report_year) agar konsisten dengan form
+          const yearFromReport = typeof item.report_year === 'number'
+            ? item.report_year
+            : (typeof item.report_year === 'string' && item.report_year.trim() !== ''
+              ? Number(item.report_year)
+              : null);
+
+          const yearFromEvaluation = item.evaluation_date
+            ? new Date(item.evaluation_date).getFullYear()
+            : null;
+
+          const yearFromSubmission = submissionDate
+            ? new Date(submissionDate).getFullYear()
+            : new Date().getFullYear();
 
           return {
             id: item.submission_code ?? String(item.id),
             type: 'evaluasi',
             instansiName: item.instansi_name ?? 'Instansi tidak dikenal',
             submitDate: submissionDate ?? new Date().toISOString(),
-            year: yearFromEvaluation ?? yearFromSubmission,
+            // Prioritas: report_year -> evaluation_date -> submission_date
+            year: yearFromReport ?? yearFromEvaluation ?? yearFromSubmission,
             status: item.status ?? 'pending',
             payload: {
               backend: { data: item },
@@ -191,6 +209,26 @@ const Verification: React.FC = () => {
       });
   }, [filterDistrictId]);
 
+  // --- CONFIG OF REPORTING LIMIT ---
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const storedDeadline = window.localStorage.getItem('reporting_deadline');
+    const storedAllowLate = window.localStorage.getItem('allow_late_reporting');
+    if (storedDeadline) {
+      setReportingDeadline(storedDeadline);
+    }
+    if (storedAllowLate !== null) {
+      setAllowLateReporting(storedAllowLate === 'true');
+    }
+  }, []);
+  const isLateSubmission = (submitDateIso: string | null | undefined): boolean => {
+    if (!allowLateReporting || !reportingDeadline || !submitDateIso) return false;
+    const deadline = new Date(reportingDeadline);
+    const submittedAt = new Date(submitDateIso);
+    if (Number.isNaN(deadline.getTime()) || Number.isNaN(submittedAt.getTime())) return false;
+    return submittedAt.getTime() > deadline.getTime();
+  };
+
   const handleVerify = async (record: SubmissionRecord, newStatus: 'verified' | 'rejected') => {
     try {
       const backendData = (record.payload as any)?.backend?.data;
@@ -286,6 +324,17 @@ const Verification: React.FC = () => {
 
         const instansiForPdf = {
           ...instansiData,
+          tanggal: backendData?.evaluation_date ?? backendData?.submission_date ?? null,
+          tingkat:
+            backendData?.instansi_level_text ??
+            backendData?.instansi_level?.name ??
+            (submission.payload as any)?.instansiData?.level ??
+            null,
+          reportYear:
+            backendData?.report_year ??
+            (backendData?.evaluation_date
+              ? new Date(backendData.evaluation_date).getFullYear()
+              : new Date().getFullYear()),
           originRegencyName: backendData?.origin_regency_name ?? null,
           originDistrictName: backendData?.origin_district_name ?? null,
           originVillageName: backendData?.origin_village_name ?? null,
@@ -382,13 +431,15 @@ const Verification: React.FC = () => {
       instansiLevelText =
         backendData?.instansi_level_text ??
         backendData?.instansi_level?.name ??
-        (r.payload as any)?.instansiData?.level ?? null;
+        (r.payload as any)?.instansiData?.level ??
+        null;
     } else if (r.type === 'laporan') {
       const backendData: any = (r.payload as any)?.backend?.data ?? null;
       instansiLevelText =
         backendData?.instansi_level_text ??
         backendData?.instansi_level?.name ??
-        (r.payload as any)?.level ?? null;
+        (r.payload as any)?.level ??
+        null;
     }
 
     const matchesInstansiLevel =
@@ -593,6 +644,11 @@ const Verification: React.FC = () => {
       const originRegencyName: string | null = backendData?.origin_regency_name ?? null;
       const originDistrictName: string | null = backendData?.origin_district_name ?? null;
       const originVillageName: string | null = backendData?.origin_village_name ?? null;
+      const submissionDate: string | null = backendData?.submission_date ?? null;
+      const formattedSubmissionDate = submissionDate
+        ? new Date(submissionDate).toLocaleDateString('id-ID')
+        : null;
+      const reportYearDetail = backendData?.report_year ?? null;
 
       return (
         <div className="space-y-6">
@@ -609,6 +665,21 @@ const Verification: React.FC = () => {
                   {originDistrictName && `, Kec ${originDistrictName}`}
                   {originVillageName && `, Desa/Kel ${originVillageName}`}
                 </p>
+              )}
+              {(reportYearDetail || formattedSubmissionDate) && (
+                <div className="mt-2 space-y-1 text-[11px] text-slate-600">
+                  {reportYearDetail && (
+                    <p>
+                      <span className="font-semibold">Tahun Pelaporan:</span> {reportYearDetail}
+                    </p>
+                  )}
+                  {formattedSubmissionDate && (
+                    <p>
+                      <span className="font-semibold">Tanggal Pengiriman Formulir:</span>{' '}
+                      {formattedSubmissionDate}
+                    </p>
+                  )}
+                </div>
               )}
             </div>
             <div className="text-right">
@@ -983,7 +1054,7 @@ const Verification: React.FC = () => {
                         </tr>
                      </thead>
                      <tbody className="divide-y divide-slate-50">
-                        {evaluasiPaginated.map((row) => {
+                         {evaluasiPaginated.map((row) => {
                            const backendData: any = (row.payload as any)?.backend?.data ?? null;
                            const scoreFromPayload = (row.payload as any)?.score;
                            const categoryFromPayload = (row.payload as any)?.category;
@@ -1004,7 +1075,11 @@ const Verification: React.FC = () => {
                              (row.payload as any)?.instansiData?.level ??
                              null;
 
+                           const wasLateAtSubmission: boolean = !!backendData?.is_late;
+                           const isLate: boolean = wasLateAtSubmission || isLateSubmission(row.submitDate);
+
                            // Tentukan label asal wilayah untuk tampilan list evaluasi
+
                            let originLabel: string | null = null;
                            if (instansiLevelText) {
                              const upper = instansiLevelText.toUpperCase();
@@ -1026,15 +1101,20 @@ const Verification: React.FC = () => {
                                     <div>
                                        <div className="font-semibold text-slate-800">{row.instansiName}</div>
                                        <div className="flex flex-col gap-0.5 mt-0.5">
-                                         <div className="text-xs text-slate-400 font-mono">
-                                           {new Date(row.submitDate).toLocaleDateString('id-ID')}
-                                         </div>
-                                         {originLabel && (
-                                           <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-100">
-                                             {originLabel}
-                                           </span>
-                                         )}
-                                       </div>
+                                        <div className="text-xs text-slate-500">
+                                          Tahun Pelaporan:{' '}
+                                          <span className="font-mono font-semibold">{row.year}</span>
+                                        </div>
+                                        <div className="text-xs text-slate-400 font-mono">
+                                          Tanggal Pengiriman Formulir:{' '}
+                                          {new Date(row.submitDate).toLocaleDateString('id-ID')}
+                                        </div>
+                                        {originLabel && (
+                                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-100">
+                                            {originLabel}
+                                          </span>
+                                        )}
+                                      </div>
                                     </div>
                                  </div>
                               </td>
@@ -1048,10 +1128,17 @@ const Verification: React.FC = () => {
                                  </div>
                               </td>
 
-                              <td className="px-6 py-4">
-                                 <Badge variant={row.status === 'verified' ? 'success' : row.status === 'rejected' ? 'danger' : 'warning'}>
+                              <td className="px-6 py-4 text-center align-middle">
+                                <div className="inline-flex flex-col items-center gap-1">
+                                  <Badge variant={row.status === 'verified' ? 'success' : row.status === 'rejected' ? 'danger' : 'warning'}>
                                     {row.status === 'verified' ? 'Terverifikasi' : row.status === 'rejected' ? 'Ditolak' : 'Menunggu'}
-                                 </Badge>
+                                  </Badge>
+                                  {isLate && (
+                                    <span className="inline-flex items-center justify-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-700 border border-red-200">
+                                      Terlambat
+                                    </span>
+                                  )}
+                                </div>
                               </td>
                               <td className="px-6 py-4">
                                  <div className="flex items-center justify-center gap-2">
@@ -1145,7 +1232,12 @@ const Verification: React.FC = () => {
                         </tr>
                      </thead>
                      <tbody className="divide-y divide-slate-50">
-                        {laporanPaginated.map((row) => (
+                        {laporanPaginated.map((row) => {
+                           const backendData: any = (row.payload as any)?.backend?.data ?? null;
+                           const wasLateAtSubmission: boolean = !!backendData?.is_late;
+                           const isLate: boolean = wasLateAtSubmission || isLateSubmission(row.submitDate);
+
+                           return (
                            <tr key={row.id} className="group hover:bg-slate-50/80 transition-colors">
                              <td className="px-6 py-4">
                                <div className="flex items-center gap-3">
@@ -1159,7 +1251,6 @@ const Verification: React.FC = () => {
 
                              <td className="px-6 py-4">
                                {(() => {
-                                 const backendData: any = (row.payload as any)?.backend?.data ?? null;
                                  const rawLevel: string | null =
                                    backendData?.instansi_level_text ??
                                    backendData?.instansi_level?.name ??
@@ -1188,10 +1279,17 @@ const Verification: React.FC = () => {
                                })()}
                              </td>
 
-                             <td className="px-6 py-4">
-                               <Badge variant={row.status === 'verified' ? 'success' : row.status === 'rejected' ? 'danger' : 'warning'}>
-                                 {row.status === 'verified' ? 'Terverifikasi' : row.status === 'rejected' ? 'Ditolak' : 'Menunggu'}
-                               </Badge>
+                             <td className="px-6 py-4 text-center align-middle">
+                                <div className="inline-flex flex-col items-center gap-1">
+                                  <Badge variant={row.status === 'verified' ? 'success' : row.status === 'rejected' ? 'danger' : 'warning'}>
+                                    {row.status === 'verified' ? 'Terverifikasi' : row.status === 'rejected' ? 'Ditolak' : 'Menunggu'}
+                                  </Badge>
+                                  {isLate && (
+                                    <span className="inline-flex items-center justify-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-700 border border-red-200">
+                                      Terlambat
+                                    </span>
+                                  )}
+                                </div>
                              </td>
                              <td className="px-6 py-4">
                                <div className="flex items-center justify-center gap-2">
@@ -1204,7 +1302,7 @@ const Verification: React.FC = () => {
                                </div>
                              </td>
                            </tr>
-                        ))}
+                        )})}
                      </tbody>
                   </table>
                </div>
@@ -1268,71 +1366,82 @@ const Verification: React.FC = () => {
          title={`Detail ${selectedRecord?.type === 'evaluasi' ? 'Evaluasi Mandiri' : 'Laporan Kegiatan'}`}
          size="xl"
          footer={
-            <div className="flex justify-between w-full">
-                <Button 
-                   variant="outline" 
-                   onClick={() => selectedRecord && handleDownloadPDF(selectedRecord)}
-                   leftIcon={<FileText className="w-4 h-4 text-red-500"/>}
-                   className="border-slate-300 text-slate-600"
-                >
-                   Unduh PDF
-                </Button>
-                
-                <div className="flex gap-2 items-center">
-                  <Button
-                    variant="outline"
-                    onClick={async () => {
-                      if (!selectedRecord) return;
-
-                      const result = await showConfirmation(
-                        'Hapus Surat?',
-                        'Tindakan ini akan menghapus data laporan secara permanen.',
-                        'Ya, hapus',
-                        'Batal'
-                      );
-
-                      if (result.isConfirmed) {
-                        await handleDelete(selectedRecord);
-                      }
-                    }}
-                    leftIcon={<Trash2 className="w-4 h-4 text-red-500" />}
-                    className="border-red-200 text-red-600 hover:bg-red-50"
-                  >
-                    Hapus
-                  </Button>
-
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between w-full gap-3 sm:gap-4">
+                <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center w-full sm:w-auto">
                   {selectedRecord?.status === 'pending' ? (
-                    <div className="flex gap-2">
-                      <Button
-                        variant="danger"
-                        onClick={() => {
-                          if (selectedRecord) void handleVerify(selectedRecord, 'rejected');
-                          setIsModalOpen(false);
-                        }}
-                      >
-                        Tolak
-                      </Button>
+                    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                       <Button
                         variant="primary"
                         onClick={() => {
                           if (selectedRecord) void handleVerify(selectedRecord, 'verified');
                           setIsModalOpen(false);
                         }}
-                        className="bg-green-600 hover:bg-green-700"
+                        className="order-1 sm:order-2 bg-green-600 hover:bg-green-700 w-full sm:w-auto justify-center"
                       >
                         Verifikasi
                       </Button>
+                      <Button
+                        variant="danger"
+                        onClick={async () => {
+                          if (!selectedRecord) return;
+
+                          const result = await showConfirmation(
+                            'Tolak Laporan?',
+                            'Apakah Anda yakin ingin menolak laporan ini?',
+                            'Ya, tolak',
+                            'Batal'
+                          );
+
+                          if (result.isConfirmed) {
+                            void handleVerify(selectedRecord, 'rejected');
+                            setIsModalOpen(false);
+                          }
+                        }}
+                        className="order-2 sm:order-1 w-full sm:w-auto justify-center"
+                      >
+                        Tolak
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        onClick={() => selectedRecord && handleDownloadPDF(selectedRecord)}
+                        leftIcon={<FileText className="w-4 h-4 text-red-500"/>}
+                        className="border-slate-300 text-slate-600 w-full sm:w-auto justify-center"
+                      >
+                        Unduh PDF
+                      </Button>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-2 px-4 py-2 bg-slate-100 rounded-lg text-slate-500 text-sm font-medium">
+                    <div className="flex items-center justify-center gap-2 px-4 py-2 bg-slate-100 rounded-lg text-slate-500 text-sm font-medium w-full sm:w-auto">
                       {selectedRecord?.status === 'verified' ? (
                         <><Check className="w-4 h-4 text-green-600" /> Sudah Diverifikasi</>
+
                       ) : (
                         <><X className="w-4 h-4 text-red-600" /> Sudah Ditolak</>
                       )}
                     </div>
                   )}
                 </div>
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    if (!selectedRecord) return;
+
+                    const result = await showConfirmation(
+                      'Hapus Surat?',
+                      'Tindakan ini akan menghapus data laporan secara permanen.',
+                      'Ya, hapus',
+                      'Batal'
+                    );
+
+                     if (result.isConfirmed) {
+                       await handleDelete(selectedRecord);
+                    }
+                  }}
+                  leftIcon={<Trash2 className="w-4 h-4 text-red-500" />}
+                  className="border-red-200 text-red-600 hover:bg-red-50 w-full sm:w-auto justify-center"
+                >
+                  Hapus
+                </Button>
             </div>
          }
       >
@@ -1340,6 +1449,6 @@ const Verification: React.FC = () => {
       </Modal>
     </div>
   );
-};
+}
 
 export default Verification;

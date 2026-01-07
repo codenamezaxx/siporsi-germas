@@ -20,7 +20,10 @@ class EvaluationSubmissionController extends Controller
     {
         $perPage = min(max($request->integer('per_page', 15), 1), 100);
 
+        $user = $request->user();
+
         $submissions = EvaluationSubmission::query()
+            ->forAdminUser($user)
             ->with([
                 'instansi',
                 'instansiLevel',
@@ -85,6 +88,8 @@ class EvaluationSubmissionController extends Controller
                 'employee_female_count' => $data['employee_female_count'] ?? null,
                 'evaluation_date' => $data['evaluation_date'] ?? null,
                 'submission_date' => Carbon::now(),
+                'report_year' => $data['report_year'] ?? (int) date('Y'),
+                'is_late' => $data['is_late'] ?? false,
                 'score' => $score,
                 'category_id' => $category?->id,
                 'category_label' => $category?->label,

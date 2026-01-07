@@ -20,6 +20,7 @@ class LaporanSubmissionResource extends JsonResource
             'origin_regency_name' => $this->origin_regency_name,
             'report_year' => $this->report_year,
             'report_level' => $this->report_level,
+            'is_late' => $this->is_late,
             'status' => $this->status,
             'notes' => $this->notes,
             'submitted_at' => optional($this->submitted_at)->toIso8601String(),

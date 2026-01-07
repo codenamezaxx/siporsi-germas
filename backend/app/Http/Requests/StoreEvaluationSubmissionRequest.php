@@ -27,6 +27,8 @@ class StoreEvaluationSubmissionRequest extends FormRequest
             'pejabat_jabatan' => ['nullable', 'string', 'max:150'],
             'employee_male_count' => ['nullable', 'integer', 'min:0'],
             'employee_female_count' => ['nullable', 'integer', 'min:0'],
+            'report_year' => ['required', 'integer', 'min:2000', 'max:2100'],
+            'is_late' => ['nullable', 'boolean'],
             'evaluation_date' => ['nullable', 'date'],
             'remarks' => ['nullable', 'string'],
             'answers' => ['required', 'array', 'min:1'],

@@ -18,7 +18,10 @@ class LaporanSubmissionController extends Controller
     {
         $perPage = min(max($request->integer('per_page', 15), 1), 100);
 
+        $user = $request->user();
+
         $submissions = LaporanSubmission::query()
+            ->forAdminUser($user)
             ->with([
                 'instansi',
                 'instansiLevel',
@@ -66,6 +69,7 @@ class LaporanSubmissionController extends Controller
                 'origin_regency_name' => $data['origin_regency_name'] ?? null,
                 'report_year' => $data['report_year'],
                 'report_level' => $data['report_level'] ?? null,
+                'is_late' => $data['is_late'] ?? false,
                 'status' => 'pending',
                 'notes' => $data['notes'] ?? null,
                 'submitted_by' => $userId,

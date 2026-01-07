@@ -1,18 +1,29 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Save, Plus, Trash2, GripVertical, FileText, CheckSquare, Info } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { FormStore, INSTANSI_LEVELS, INSTANSI_LIST, Cluster, Question, LaporanTemplate, LaporanSection } from '../../utils/formStore';
+import { FormStore, INSTANSI_LEVELS, INSTANSI_LIST, Cluster, Question, LaporanTemplate, LaporanSection, INSTANSI_LIST_PROV, INSTANSI_LIST_KABKOTA } from '../../utils/formStore';
 import { apiClient } from '../../utils/apiClient';
 import { showSuccess } from '../../utils/alerts';
 
+// Mapping tampilan level instansi -> ID level (dipakai untuk Laporan & instansi options)
 const LEVEL_TO_ID: Record<string, number> = {
   'INSTANSI TINGKAT PROVINSI': 1,
   'INSTANSI TINGKAT KABUPATEN / KOTA': 2,
   'INSTANSI TINGKAT KECAMATAN': 3,
-  'INSTANSI TINGKAT KELURAHAN / DESA': 4,
+  'INSTANSI TINGKAT KELURAHAN / DESA': 6, // kelurahan_desa
   'INSTANSI TINGKAT PERUSAHAAN': 5,
+};
+
+// Mapping tampilan level instansi -> kode level di tabel instansi_levels
+const LEVEL_TO_CODE: Record<string, string> = {
+  'INSTANSI TINGKAT PROVINSI': 'provinsi',
+  'INSTANSI TINGKAT KABUPATEN / KOTA': 'kab_kota',
+  'INSTANSI TINGKAT KECAMATAN': 'kecamatan',
+  'INSTANSI TINGKAT KELURAHAN / DESA': 'kelurahan_desa',
+  'INSTANSI TINGKAT PERUSAHAAN': 'perusahaan',
 };
 
 const slugify = (value: string): string => {
@@ -24,6 +35,21 @@ const slugify = (value: string): string => {
 };
 
 const FormBuilder: React.FC = () => {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const roleRaw =
+      (typeof window !== 'undefined' && window.sessionStorage.getItem('user_role')) ||
+      (typeof window !== 'undefined' && window.localStorage.getItem('user_role')) ||
+      null;
+
+    const role = roleRaw ? roleRaw.toLowerCase().trim() : '';
+    const isAllowed = role.includes('super_admin') || role.includes('admin_provinsi');
+
+    if (!isAllowed) {
+      navigate('/admin/dashboard', { replace: true });
+    }
+  }, [navigate]);
   const [activeTab, setActiveTab] = useState<'evaluasi' | 'laporan'>('evaluasi');
   
   // --- STATE FOR EVALUASI ---
@@ -37,8 +63,12 @@ const FormBuilder: React.FC = () => {
   ] as const;
 
   const [selectedLaporanLevel, setSelectedLaporanLevel] = useState<string>(LAPORAN_LEVELS[0]);
-  const [selectedInstansi, setSelectedInstansi] = useState(INSTANSI_LIST[0].id);
+  const [selectedInstansi, setSelectedInstansi] = useState<string>('');
   const [laporanTemplate, setLaporanTemplate] = useState<LaporanTemplate | null>(null);
+
+  // Instansi options untuk tab laporan (dibaca dari backend per level)
+  const [instansiOptions, setInstansiOptions] = useState<{ id: number; name: string; slug?: string }[]>([]);
+  const [instansiLoading, setInstansiLoading] = useState(false);
 
   // Load Data Effect
   useEffect(() => {
@@ -46,10 +76,11 @@ const FormBuilder: React.FC = () => {
       // Admin evaluasi builder sekarang membaca klaster dari backend
       const loadEvaluasi = async () => {
         try {
-          const levelId = LEVEL_TO_ID[selectedLevel] ?? null;
+          const levelCode = LEVEL_TO_CODE[selectedLevel] ?? null;
           const resp = await apiClient.get<any>('/templates/evaluasi', {
             query: {
-              instansi_level_id: levelId || undefined,
+              // Gunakan kode level agar tidak bergantung pada ID numerik
+              instansi_level_code: levelCode || undefined,
             },
           });
           const rawData: any[] = (resp as any)?.data ?? [];
@@ -75,20 +106,70 @@ const FormBuilder: React.FC = () => {
 
       loadEvaluasi();
     } else {
-      // Admin laporan builder membaca template laporan dari backend per tingkat instansi
-      const loadLaporan = async () => {
+      // Admin laporan builder membaca daftar instansi & template laporan dari backend per tingkat instansi
+      const loadInstansiAndLaporan = async () => {
         try {
           const currentYear = new Date().getFullYear();
           const levelId = LEVEL_TO_ID[selectedLaporanLevel] ?? null;
-          const selectedInstansiName =
-            INSTANSI_LIST.find((i) => i.id === selectedInstansi)?.name || INSTANSI_LIST[0].name;
-          const instansiSlug = slugify(selectedInstansiName);
 
+          // 1) Load daftar instansi untuk level terpilih
+          setInstansiLoading(true);
+
+          const instansiResp = await apiClient.get<any>('/instansi', {
+            query: {
+              instansi_level_id: levelId || undefined,
+            },
+          });
+
+          const rawInstansi: any[] = (instansiResp as any)?.data ?? [];
+
+          let options: { id: number; name: string; slug?: string }[] = [];
+
+          if (rawInstansi.length > 0) {
+            options = rawInstansi.map((item) => ({
+              id: Number(item.id),
+              name: String(item.name ?? 'Instansi'),
+              slug: item.slug ? String(item.slug) : undefined,
+            }));
+          } else {
+            // Fallback ke daftar statis jika backend kosong
+            const fallbackList =
+              selectedLaporanLevel === 'INSTANSI TINGKAT KABUPATEN / KOTA'
+                ? INSTANSI_LIST_KABKOTA
+                : INSTANSI_LIST_PROV;
+
+            options = fallbackList.map((item: any, idx: number) => ({
+              id: idx + 1,
+              name: String(item.name),
+              slug: slugify(item.name),
+            }));
+          }
+
+          setInstansiOptions(options);
+
+          // Pastikan selectedInstansi terisi
+          const effectiveSelectedInstansi = selectedInstansi || (options[0] ? String(options[0].id) : '');
+          if (!selectedInstansi && options[0]) {
+            setSelectedInstansi(String(options[0].id));
+          }
+
+          if (!effectiveSelectedInstansi) {
+            setLaporanTemplate(null);
+            return;
+          }
+
+          const selectedOption = options.find((opt) => String(opt.id) === String(effectiveSelectedInstansi));
+
+          if (!selectedOption) {
+            setLaporanTemplate(null);
+            return;
+          }
+
+          // 2) Load template laporan dari backend berdasarkan instansi_id + level_id (tanpa filter tahun)
           const resp = await apiClient.get<any>('/templates/laporan', {
             query: {
-              year: currentYear,
               instansi_level_id: levelId || undefined,
-              instansi_slug: instansiSlug,
+              instansi_id: selectedOption.id,
             },
           });
 
@@ -104,10 +185,8 @@ const FormBuilder: React.FC = () => {
           }
 
           const mappedTemplate: LaporanTemplate = {
-            instansiId: selectedInstansi,
-            instansiName:
-              INSTANSI_LIST.find((i) => i.id === selectedInstansi)?.name ||
-              String(first.instansi_name ?? INSTANSI_LIST[0].name),
+            instansiId: String(selectedOption.id),
+            instansiName: selectedOption.name,
             level: selectedLaporanLevel,
             sections: Array.isArray(first.sections)
               ? first.sections.map((s: any) => ({
@@ -127,10 +206,12 @@ const FormBuilder: React.FC = () => {
           console.error('Gagal memuat template laporan dari server di FormBuilder', error);
           setLaporanTemplate(null);
           toast.error('Gagal memuat template laporan dari server.');
+        } finally {
+          setInstansiLoading(false);
         }
       };
 
-      loadLaporan();
+      loadInstansiAndLaporan();
     }
   }, [activeTab, selectedLevel, selectedInstansi, selectedLaporanLevel]);
 
@@ -223,16 +304,14 @@ const FormBuilder: React.FC = () => {
       }
 
       const levelId = LEVEL_TO_ID[selectedLaporanLevel] ?? null;
-      const selectedInstansiName =
-        INSTANSI_LIST.find((i) => i.id === selectedInstansi)?.name || INSTANSI_LIST[0].name;
-      const instansiSlug = slugify(selectedInstansiName);
+      const selectedOption = instansiOptions.find((opt) => String(opt.id) === String(selectedInstansi));
 
       const payload = {
         name: (laporanTemplate as any).name ?? 'Laporan Germas',
         description: (laporanTemplate as any).description ?? null,
         year: new Date().getFullYear(),
         instansi_level_id: levelId,
-        instansi_slug: instansiSlug,
+        instansi_id: selectedOption ? selectedOption.id : undefined,
         sections: laporanTemplate.sections.map((s, idx) => ({
           id: (s as any).id && String((s as any).id).match(/^\d+$/) ? Number((s as any).id) : null,
           code: (s as any).code ?? null,
@@ -417,8 +496,9 @@ const FormBuilder: React.FC = () => {
                 value={selectedInstansi}
                 onChange={(e) => setSelectedInstansi(e.target.value)}
                 className="w-full md:w-auto flex-1 bg-white border border-amber-200 text-slate-800 text-sm rounded-lg focus:ring-amber-500 focus:border-amber-500 block p-2.5"
+                disabled={instansiLoading || instansiOptions.length === 0}
               >
-                {INSTANSI_LIST.map((inst) => (
+                {instansiOptions.map((inst) => (
                   <option key={inst.id} value={inst.id}>
                     {inst.name}
                   </option>

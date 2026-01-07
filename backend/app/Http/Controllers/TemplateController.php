@@ -7,6 +7,7 @@ use App\Http\Resources\LaporanTemplateResource;
 use App\Models\EvaluasiCluster;
 use App\Models\EvaluasiQuestion;
 use App\Models\Instansi;
+use App\Models\InstansiLevel;
 use App\Models\LaporanTemplate;
 use App\Models\LaporanSection;
 use Illuminate\Http\JsonResponse;
@@ -18,6 +19,16 @@ class TemplateController extends Controller
     public function evaluasi(Request $request): JsonResponse
     {
         $levelId = $request->integer('instansi_level_id');
+
+        // Opsional: izinkan frontend mengirim instansi_level_code agar tidak bergantung pada ID numerik
+        if (! $levelId) {
+            $levelCode = $request->query('instansi_level_code');
+
+            if (is_string($levelCode) && $levelCode !== '') {
+                $levelId = InstansiLevel::where('code', $levelCode)->value('id');
+            }
+        }
+
         $query = EvaluasiCluster::query()->with(['questions']);
 
         if ($levelId) {
@@ -167,6 +178,7 @@ class TemplateController extends Controller
         $instansiSlug = $request->query('instansi_slug');
         $year = $request->integer('year');
 
+        // Selalu mulai dari template dasar (year = null); tahun hanya opsional.
         $query = LaporanTemplate::query()->with(['sections' => function ($builder) {
             $builder->orderBy('sequence');
         }])->where('is_active', true);
@@ -184,11 +196,23 @@ class TemplateController extends Controller
             $query->where('instansi_id', $instansiId);
         }
 
+        // Jika frontend mengirim tahun, coba cari template khusus tahun tsb.
+        // Namun jika tidak ada, tetap kembalikan template dasar (year = null).
         if ($year) {
-            $query->where('year', $year);
-        }
+            $yearQuery = (clone $query)->where('year', $year);
 
-        $templates = $query->orderByDesc('is_default')->orderBy('name')->get();
+            $templates = $yearQuery->orderByDesc('is_default')->orderBy('name')->get();
+
+            if ($templates->isEmpty()) {
+                // Fallback ke template dasar (tanpa tahun)
+                $query->whereNull('year');
+                $templates = $query->orderByDesc('is_default')->orderBy('name')->get();
+            }
+        } else {
+            // Tidak ada tahun dikirim: gunakan template dasar saja
+            $query->whereNull('year');
+            $templates = $query->orderByDesc('is_default')->orderBy('name')->get();
+        }
 
         return response()->json([
             'status' => 'success',

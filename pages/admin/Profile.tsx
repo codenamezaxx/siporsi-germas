@@ -3,7 +3,8 @@ import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
-import { Mail, Phone, Building2, Calendar, MapPin, Camera, PencilLine, KeyRound } from 'lucide-react';
+import { Mail, Phone, Building2, Calendar, MapPin, Camera, PencilLine, KeyRound, User } from 'lucide-react';
+
 import { apiClient } from '../../utils/apiClient';
 
 const Profile: React.FC = () => {
@@ -11,8 +12,10 @@ const Profile: React.FC = () => {
     status: string;
     user: {
       id: number;
+      username?: string | null;
       name: string;
       email: string;
+
       role?: string | null;
       phone?: string | null;
       photo_url?: string | null;
@@ -33,15 +36,6 @@ const Profile: React.FC = () => {
         id: number;
         code?: string | null;
         name?: string | null;
-      } | null;
-      instansi?: {
-        id: number;
-        name?: string | null;
-        slug?: string | null;
-        category?: string | null;
-        address?: string | null;
-        phone?: string | null;
-        email?: string | null;
       } | null;
       instansi_level?: {
         id: number;
@@ -108,25 +102,20 @@ const Profile: React.FC = () => {
   const userData = useMemo(() => {
     const name = user?.name ?? 'Pengguna';
     const avatar = user?.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0ea5e9&color=fff&bold=true`;
+
     const lastLogin = user?.last_login_at
       ? new Date(user.last_login_at).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' })
       : '-';
 
     return {
       name,
+      username: user?.username ?? null,
       email: user?.email ?? null,
       phone: user?.phone ?? null,
       role: user?.role ?? null,
       lastLogin,
       avatar,
-      instansi: {
-        nama: user?.instansi?.name ?? null,
-        level: user?.instansi_level?.name ?? null,
-        kodeLevel: user?.instansi_level?.code ?? null,
-        alamat: user?.instansi?.address ?? null,
-        telp: user?.instansi?.phone ?? null,
-        email: user?.instansi?.email ?? null,
-      },
+      instansiLevelName: user?.instansi_level?.name ?? null,
       asalWilayah: {
         kabKota: user?.origin_regency?.name ?? null,
         kecamatan: user?.origin_district?.name ?? null,
@@ -136,23 +125,33 @@ const Profile: React.FC = () => {
   }, [user]);
 
   const displayInstansiLevel = useMemo(() => {
-    const raw = userData.instansi.level?.trim();
+    const raw = userData.instansiLevelName?.trim();
     if (!raw) return null;
     if (raw.toUpperCase() === 'TINGKAT_INSTANSI') return null;
     return raw;
-  }, [userData.instansi.level]);
+  }, [userData.instansiLevelName]);
+
+  const isProvinsiLevelAdmin = useMemo(() => {
+    const role = (userData.role ?? '').toLowerCase().trim();
+    const levelName = (userData.instansiLevelName ?? '').toUpperCase().trim();
+
+    if (!role && !levelName) return false;
+    if (role.includes('admin_provinsi')) return true;
+    if (levelName.includes('PROVINSI')) return true;
+    return false;
+  }, [userData.role, userData.instansiLevelName]);
 
   useEffect(() => {
     if (!user) return;
     setEditName(user.name ?? '');
-    setEditPhone(user.phone ?? '');
+    setEditPhone(user.username ?? '');
   }, [user]);
 
   const handleOpenEditProfile = () => {
     setActionError(null);
     setActionSuccess(null);
     setEditName(user?.name ?? '');
-    setEditPhone(user?.phone ?? '');
+    setEditPhone(user?.username ?? '');
     setIsEditProfileOpen(true);
   };
 
@@ -182,7 +181,7 @@ const Profile: React.FC = () => {
         '/auth/profile',
         {
           name: editName,
-          phone: editPhone || null,
+          username: editPhone || '',
         }
       );
 
@@ -297,10 +296,13 @@ const Profile: React.FC = () => {
                     <img
                       src={userData.avatar}
                       alt="Profile"
-                      className="w-24 h-24 rounded-2xl border border-slate-200 bg-white object-cover"
+                      className="w-24 h-24 rounded-full border border-slate-200 bg-white object-cover shadow-sm"
                     />
                     <div className="md:hidden">
                       <div className="text-xl font-bold text-slate-800">{userData.name}</div>
+                      {userData.username && (
+                        <div className="text-xs font-mono text-slate-500 mt-0.5">@{userData.username}</div>
+                      )}
                       <div className="mt-1 flex flex-wrap gap-2">
                         {displayInstansiLevel && <Badge variant="info">{displayInstansiLevel}</Badge>}
                       </div>
@@ -311,6 +313,9 @@ const Profile: React.FC = () => {
                     <div className="hidden md:flex md:items-center md:justify-between gap-3">
                       <div>
                         <h2 className="text-2xl font-bold text-slate-800">{userData.name}</h2>
+                        {userData.username && (
+                          <div className="text-xs font-mono text-slate-500 mt-1">@{userData.username}</div>
+                        )}
                         <div className="mt-2 flex flex-wrap gap-2">
                           {displayInstansiLevel && <Badge variant="info">{displayInstansiLevel}</Badge>}
                         </div>
@@ -331,10 +336,10 @@ const Profile: React.FC = () => {
                           <span className="text-sm font-medium text-slate-700 break-all">{userData.email}</span>
                         </div>
                       )}
-                      {userData.phone && (
+                      {userData.username && (
                         <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
-                          <Phone className="w-4 h-4 text-slate-500" />
-                          <span className="text-sm font-medium text-slate-700">{userData.phone}</span>
+                          <User className="w-4 h-4 text-slate-500" />
+                          <span className="text-sm font-medium text-slate-700 break-all">@{userData.username}</span>
                         </div>
                       )}
                     </div>
@@ -344,71 +349,29 @@ const Profile: React.FC = () => {
             </div>
           </div>
 
-          {(userData.instansi.nama || displayInstansiLevel || userData.instansi.alamat || userData.instansi.telp || userData.instansi.email) && (
-            <Card title="Instansi" className="shadow-md">
-              <div className="space-y-5">
-                <div className="flex items-start gap-4">
-                  <div className="p-3 bg-emerald-50 text-emerald-700 rounded-xl border border-emerald-100">
-                    <Building2 className="w-6 h-6" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="text-lg font-bold text-slate-800">{userData.instansi.nama ?? '-'}</div>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {displayInstansiLevel && <Badge variant="outline">{displayInstansiLevel}</Badge>}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {userData.instansi.alamat && (
-                    <div className="rounded-xl border border-slate-200 bg-white p-4">
-                      <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Alamat</div>
-                      <div className="flex items-start gap-3 text-slate-700 text-sm">
-                        <MapPin className="w-4 h-4 text-slate-400 mt-0.5" />
-                        <span className="font-medium leading-relaxed">{userData.instansi.alamat}</span>
-                      </div>
-                    </div>
-                  )}
-                  {(userData.instansi.telp || userData.instansi.email) && (
-                    <div className="rounded-xl border border-slate-200 bg-white p-4">
-                      <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Kontak</div>
-                      <div className="space-y-2 text-sm">
-                        {userData.instansi.telp && (
-                          <div className="flex items-center gap-3 text-slate-700">
-                            <Phone className="w-4 h-4 text-slate-400" />
-                            <span className="font-medium">{userData.instansi.telp}</span>
-                          </div>
-                        )}
-                        {userData.instansi.email && (
-                          <div className="flex items-center gap-3 text-slate-700">
-                            <Mail className="w-4 h-4 text-slate-400" />
-                            <span className="font-medium break-all">{userData.instansi.email}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </Card>
-          )}
-
-          {(userData.asalWilayah.kabKota || userData.asalWilayah.kecamatan || userData.asalWilayah.desaKel) && (
+          {(isProvinsiLevelAdmin || userData.asalWilayah.kabKota || userData.asalWilayah.kecamatan || userData.asalWilayah.desaKel) && (
             <Card title="Asal Wilayah" className="shadow-md">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {isProvinsiLevelAdmin ? (
                 <div className="rounded-xl border border-slate-200 bg-white p-4">
-                  <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Kab/Kota</div>
-                  <div className="text-sm font-semibold text-slate-700">{userData.asalWilayah.kabKota ?? '-'}</div>
+                  <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Provinsi</div>
+                  <div className="text-sm font-semibold text-slate-700">Pemerintah Provinsi Jawa Timur</div>
                 </div>
-                <div className="rounded-xl border border-slate-200 bg-white p-4">
-                  <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Kecamatan</div>
-                  <div className="text-sm font-semibold text-slate-700">{userData.asalWilayah.kecamatan ?? '-'}</div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="rounded-xl border border-slate-200 bg-white p-4">
+                    <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Kab/Kota</div>
+                    <div className="text-sm font-semibold text-slate-700">{userData.asalWilayah.kabKota ?? '-'}</div>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white p-4">
+                    <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Kecamatan</div>
+                    <div className="text-sm font-semibold text-slate-700">{userData.asalWilayah.kecamatan ?? '-'}</div>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white p-4">
+                    <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Desa/Kelurahan</div>
+                    <div className="text-sm font-semibold text-slate-700">{userData.asalWilayah.desaKel ?? '-'}</div>
+                  </div>
                 </div>
-                <div className="rounded-xl border border-slate-200 bg-white p-4">
-                  <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Desa/Kelurahan</div>
-                  <div className="text-sm font-semibold text-slate-700">{userData.asalWilayah.desaKel ?? '-'}</div>
-                </div>
-              </div>
+              )}
             </Card>
           )}
         </div>
@@ -441,12 +404,12 @@ const Profile: React.FC = () => {
             />
           </div>
           <div>
-            <label className="text-sm font-semibold text-slate-700">Nomor HP</label>
+            <label className="text-sm font-semibold text-slate-700">Username</label>
             <input
               value={editPhone}
               onChange={(e) => setEditPhone(e.target.value)}
               className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              placeholder="Nomor HP"
+              placeholder="Username"
             />
           </div>
         </div>
@@ -524,7 +487,7 @@ const Profile: React.FC = () => {
             <img
               src={userData.avatar}
               alt="Preview"
-              className="w-16 h-16 rounded-2xl border border-slate-200 object-cover"
+              className="w-16 h-16 rounded-full border border-slate-200 object-cover"
             />
             <div className="flex-1">
               <input
